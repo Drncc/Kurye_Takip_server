@@ -4,6 +4,23 @@ const Shop = require('../models/shop');
 const Courier = require('../models/courier');
 const auth = require('../middleware/auth');
 
+// Mesafe hesaplama fonksiyonu (Haversine formula)
+function calculateDistance(coord1, coord2) {
+  const [lng1, lat1] = coord1;
+  const [lng2, lat2] = coord2;
+  
+  const R = 6371; // Dünya yarıçapı (km)
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLng/2) * Math.sin(dLng/2);
+  
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
 const router = express.Router();
 
 // Yeni sipariş oluştur
@@ -11,8 +28,8 @@ router.post('/', auth('store'), async (req, res) => {
   try {
     const { customerName, customerPhone, deliveryAddress, deliveryDistrict, packageDetails, priority, deliveryCoords } = req.body;
     
-    if (!customerName || !customerPhone || !deliveryAddress || !deliveryDistrict || !packageDetails) {
-      return res.status(400).json({ error: 'Tüm alanlar zorunludur' });
+    if (!customerName || !customerPhone || !deliveryAddress || !deliveryDistrict || !packageDetails || !deliveryCoords) {
+      return res.status(400).json({ error: 'Tüm alanlar zorunludur (GPS koordinatları dahil)' });
     }
 
     // Dükkan bilgilerini al
@@ -21,14 +38,11 @@ router.post('/', auth('store'), async (req, res) => {
       return res.status(404).json({ error: 'Dükkan bulunamadı' });
     }
 
-    // Delivery location oluştur
-    let deliveryLocation = null;
-    if (deliveryCoords && deliveryCoords.lng && deliveryCoords.lat) {
-      deliveryLocation = {
-        type: 'Point',
-        coordinates: [deliveryCoords.lng, deliveryCoords.lat]
-      };
-    }
+    // Delivery location oluştur (artık zorunlu)
+    const deliveryLocation = {
+      type: 'Point',
+      coordinates: [deliveryCoords.lng, deliveryCoords.lat]
+    };
 
     // Sipariş oluştur
     const order = new Order({
@@ -45,7 +59,7 @@ router.post('/', auth('store'), async (req, res) => {
 
     await order.save();
 
-    // En yakın müsait kuryeyi bul ve ata (daha geniş arama)
+    // En yakın müsait kuryeyi bul ve ata
     const nearbyCourier = await Courier.findOne({
       active: true,
       status: 'available'
@@ -53,7 +67,7 @@ router.post('/', auth('store'), async (req, res) => {
       location: {
         $near: {
           $geometry: shop.location,
-          $maxDistance: 50000 // 50km - daha geniş arama
+          $maxDistance: 100000 // 100km - çok daha geniş arama
         }
       }
     });
@@ -103,6 +117,12 @@ router.get('/store', auth('store'), async (req, res) => {
 // Kurye siparişlerini getir
 router.get('/mine', auth('courier'), async (req, res) => {
   try {
+    // Kurye bilgilerini al (konum dahil)
+    const courier = await Courier.findById(req.user.id);
+    if (!courier) {
+      return res.status(404).json({ error: 'Kurye bulunamadı' });
+    }
+    
     const orders = await Order.find({ 
       assignedCourier: req.user.id,
       status: { $in: ['assigned', 'picked', 'delivered'] }
@@ -110,7 +130,40 @@ router.get('/mine', auth('courier'), async (req, res) => {
       .populate('shop', 'name addressText location')
       .sort({ createdAt: -1 });
     
-    res.json({ orders });
+    // Mesafe hesaplamaları ekle
+    const ordersWithDistances = orders.map(order => {
+      const orderObj = order.toObject();
+      
+      if (order.shop?.location && order.deliveryLocation && courier.location) {
+        // Kuryenin dükkana olan uzaklığı
+        const courierToShopDistance = calculateDistance(
+          courier.location.coordinates,
+          order.shop.location.coordinates
+        );
+        
+        // Siparişin dükkana olan uzaklığı
+        const orderToShopDistance = calculateDistance(
+          order.shop.location.coordinates,
+          order.deliveryLocation.coordinates
+        );
+        
+        // Kuryenin siparişe olan uzaklığı
+        const courierToOrderDistance = calculateDistance(
+          courier.location.coordinates,
+          order.deliveryLocation.coordinates
+        );
+        
+        orderObj.distances = {
+          courierToShop: courierToShopDistance.toFixed(1),
+          orderToShop: orderToShopDistance.toFixed(1),
+          courierToOrder: courierToOrderDistance.toFixed(1)
+        };
+      }
+      
+      return orderObj;
+    });
+    
+    res.json({ orders: ordersWithDistances });
   } catch (error) {
     console.error('Courier orders fetch error:', error);
     res.status(500).json({ error: 'Siparişler alınamadı' });

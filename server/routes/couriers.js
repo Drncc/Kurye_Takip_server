@@ -15,6 +15,21 @@ router.post('/status', auth('courier'), async (req, res) => {
     const { active } = req.body;
     const status = active ? 'available' : 'offline';
     
+    // Eğer kurye pasif yapılıyorsa, tüm aktif siparişlerini iptal et
+    if (!active) {
+      await Order.updateMany(
+        { 
+          assignedCourier: req.user.id, 
+          status: { $in: ['assigned', 'picked'] } 
+        },
+        { 
+          status: 'pending', 
+          assignedCourier: null,
+          assignedAt: null
+        }
+      );
+    }
+    
     const updated = await Courier.findByIdAndUpdate(
       req.user.id, 
       { active, status }, 
