@@ -3,6 +3,7 @@ const Order = require('../models/order');
 const Shop = require('../models/shop');
 const Courier = require('../models/courier');
 const auth = require('../middleware/auth');
+const { geocodeAddressToPoint } = require('../utils/geocode');
 
 // Mesafe hesaplama fonksiyonu (Haversine formula)
 function calculateDistance(coord1, coord2) {
@@ -26,10 +27,10 @@ const router = express.Router();
 // Yeni sipariş oluştur
 router.post('/', auth('store'), async (req, res) => {
   try {
-    const { customerName, customerPhone, deliveryAddress, deliveryDistrict, packageDetails, priority, deliveryCoords } = req.body;
+    const { customerName, customerPhone, deliveryAddress, deliveryDistrict, packageDetails, priority } = req.body;
     
-    if (!customerName || !customerPhone || !deliveryAddress || !deliveryDistrict || !packageDetails || !deliveryCoords) {
-      return res.status(400).json({ error: 'Tüm alanlar zorunludur (GPS koordinatları dahil)' });
+    if (!customerName || !customerPhone || !deliveryAddress || !deliveryDistrict || !packageDetails) {
+      return res.status(400).json({ error: 'Tüm alanlar zorunludur' });
     }
 
     // Dükkan bilgilerini al
@@ -38,11 +39,13 @@ router.post('/', auth('store'), async (req, res) => {
       return res.status(404).json({ error: 'Dükkan bulunamadı' });
     }
 
-    // Delivery location oluştur (artık zorunlu)
-    const deliveryLocation = {
-      type: 'Point',
-      coordinates: [deliveryCoords.lng, deliveryCoords.lat]
-    };
+    // Teslimat adresinden GPS koordinatlarını otomatik al
+    const fullAddress = `${deliveryAddress}, ${deliveryDistrict}`;
+    const deliveryLocation = await geocodeAddressToPoint(fullAddress);
+    
+    if (!deliveryLocation) {
+      return res.status(400).json({ error: 'Teslimat adresi bulunamadı. Lütfen geçerli bir adres girin.' });
+    }
 
     // Sipariş oluştur
     const order = new Order({
@@ -257,6 +260,24 @@ router.get('/:id/details', auth('courier'), async (req, res) => {
   } catch (error) {
     console.error('Order details fetch error:', error);
     res.status(500).json({ error: 'Sipariş detayları alınamadı' });
+  }
+});
+
+// Kurye için sadece liste görünümü (harita yok)
+router.get('/mine/list', auth('courier'), async (req, res) => {
+  try {
+    const orders = await Order.find({ 
+      assignedCourier: req.user.id,
+      status: { $in: ['assigned', 'picked', 'delivered'] }
+    })
+      .populate('shop', 'name addressText')
+      .select('-deliveryLocation') // GPS koordinatlarını gizle
+      .sort({ createdAt: -1 });
+    
+    res.json({ orders });
+  } catch (error) {
+    console.error('Courier orders list error:', error);
+    res.status(500).json({ error: 'Siparişler alınamadı' });
   }
 });
 

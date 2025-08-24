@@ -47,6 +47,7 @@ router.post('/status', auth('courier'), async (req, res) => {
   }
 });
 
+// Kurye konum güncelleme (sadece backend için, harita göstermeyecek)
 router.post('/location', auth('courier'), async (req, res) => {
   try {
     const { addressText, coords } = req.body; // coords: { lng, lat }
@@ -68,7 +69,6 @@ router.post('/location', auth('courier'), async (req, res) => {
     
     res.json({ 
       ok: true, 
-      location: updated.location,
       message: 'Konum güncellendi'
     });
   } catch (error) {
@@ -77,20 +77,21 @@ router.post('/location', auth('courier'), async (req, res) => {
   }
 });
 
-// List nearby active couriers for a given pickup point (shop)
+// Yakındaki aktif kuryeleri getir (sadece backend için, harita göstermeyecek)
 router.post('/nearby', auth('shop'), async (req, res) => {
   const { pickup } = req.body; // { type:'Point', coordinates:[lng,lat] }
   if (!pickup || !pickup.coordinates) return res.status(400).json({ error: 'pickup required' });
   const items = await Courier.find({
     active: true,
+    status: 'available',
     location: {
       $near: {
         $geometry: pickup,
-        $maxDistance: 20000
+        $maxDistance: 100000 // 100km
       }
     }
   })
-    .select('name location createdAt addressText phone')
+    .select('name phone status')
     .limit(10)
     .lean();
   res.json({ couriers: items });

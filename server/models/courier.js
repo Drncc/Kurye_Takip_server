@@ -23,6 +23,7 @@ const courierSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // Konum bilgisi sadece backend'de tutulacak, haritada gösterilmeyecek
   location: {
     type: {
       type: String,
