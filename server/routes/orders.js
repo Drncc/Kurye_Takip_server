@@ -117,56 +117,17 @@ router.get('/store', auth('store'), async (req, res) => {
   }
 });
 
-// Kurye siparişlerini getir
+// Kurye siparişlerini getir (basitleştirilmiş)
 router.get('/mine', auth('courier'), async (req, res) => {
   try {
-    // Kurye bilgilerini al (konum dahil)
-    const courier = await Courier.findById(req.user.id);
-    if (!courier) {
-      return res.status(404).json({ error: 'Kurye bulunamadı' });
-    }
-    
     const orders = await Order.find({ 
       assignedCourier: req.user.id,
       status: { $in: ['assigned', 'picked', 'delivered'] }
     })
-      .populate('shop', 'name addressText location')
+      .populate('shop', 'name addressText')
       .sort({ createdAt: -1 });
     
-    // Mesafe hesaplamaları ekle
-    const ordersWithDistances = orders.map(order => {
-      const orderObj = order.toObject();
-      
-      if (order.shop?.location && order.deliveryLocation && courier.location) {
-        // Kuryenin dükkana olan uzaklığı
-        const courierToShopDistance = calculateDistance(
-          courier.location.coordinates,
-          order.shop.location.coordinates
-        );
-        
-        // Siparişin dükkana olan uzaklığı
-        const orderToShopDistance = calculateDistance(
-          order.shop.location.coordinates,
-          order.deliveryLocation.coordinates
-        );
-        
-        // Kuryenin siparişe olan uzaklığı
-        const courierToOrderDistance = calculateDistance(
-          courier.location.coordinates,
-          order.deliveryLocation.coordinates
-        );
-        
-        orderObj.distances = {
-          courierToShop: courierToShopDistance.toFixed(1),
-          orderToShop: orderToShopDistance.toFixed(1),
-          courierToOrder: courierToOrderDistance.toFixed(1)
-        };
-      }
-      
-      return orderObj;
-    });
-    
-    res.json({ orders: ordersWithDistances });
+    res.json({ orders });
   } catch (error) {
     console.error('Courier orders fetch error:', error);
     res.status(500).json({ error: 'Siparişler alınamadı' });
@@ -278,6 +239,20 @@ router.get('/mine/list', auth('courier'), async (req, res) => {
   } catch (error) {
     console.error('Courier orders list error:', error);
     res.status(500).json({ error: 'Siparişler alınamadı' });
+  }
+});
+
+// Kurye için dükkanları getir
+router.get('/shops', auth('courier'), async (req, res) => {
+  try {
+    const shops = await Shop.find({})
+      .select('name addressText district')
+      .sort({ name: 1 });
+    
+    res.json({ shops });
+  } catch (error) {
+    console.error('Shops fetch error:', error);
+    res.status(500).json({ error: 'Dükkanlar alınamadı' });
   }
 });
 

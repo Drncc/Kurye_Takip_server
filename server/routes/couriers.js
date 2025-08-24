@@ -13,6 +13,11 @@ router.get('/me', auth('courier'), async (req, res) => {
 router.post('/status', auth('courier'), async (req, res) => {
   try {
     const { active } = req.body;
+    
+    if (typeof active !== 'boolean') {
+      return res.status(400).json({ error: 'active parametresi boolean olmalı' });
+    }
+    
     const status = active ? 'available' : 'offline';
     
     // Eğer kurye pasif yapılıyorsa, tüm aktif siparişlerini iptal et
@@ -47,21 +52,21 @@ router.post('/status', auth('courier'), async (req, res) => {
   }
 });
 
-// Kurye konum güncelleme (sadece backend için, harita göstermeyecek)
+// Kurye konum güncelleme (GPS koordinatları ile)
 router.post('/location', auth('courier'), async (req, res) => {
   try {
-    const { addressText, coords } = req.body; // coords: { lng, lat }
-    let location;
+    const { coords } = req.body; // coords: { lng, lat }
     
-    if (coords && coords.lng && coords.lat) {
-      location = { type: 'Point', coordinates: [coords.lng, coords.lat] };
-    } else if (addressText) {
-      location = await geocodeAddressToPoint(addressText);
-    } else {
-      return res.status(400).json({ error: 'Provide addressText or coords' });
+    if (!coords || typeof coords.lng !== 'number' || typeof coords.lat !== 'number') {
+      return res.status(400).json({ error: 'Geçerli GPS koordinatları gerekli (lng ve lat)' });
     }
     
-    const updated = await Courier.findByIdAndUpdate(
+    const location = { 
+      type: 'Point', 
+      coordinates: [coords.lng, coords.lat] 
+    };
+    
+    await Courier.findByIdAndUpdate(
       req.user.id, 
       { location }, 
       { new: true }
@@ -69,7 +74,8 @@ router.post('/location', auth('courier'), async (req, res) => {
     
     res.json({ 
       ok: true, 
-      message: 'Konum güncellendi'
+      message: 'Konum güncellendi',
+      coordinates: [coords.lng, coords.lat]
     });
   } catch (error) {
     console.error('Location update error:', error);
