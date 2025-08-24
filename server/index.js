@@ -8,7 +8,12 @@ const orderRoutes = require('./routes/orders');
 const path = require('path');
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: true, // Tüm origin'lere izin ver (production'da daha güvenli olabilir)
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token']
+}));
 app.use(express.json());
 
 connectDb();
