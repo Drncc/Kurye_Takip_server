@@ -31,8 +31,8 @@ router.post('/register/shop', async (req, res) => {
         coordinates: [Number(coordinates.lng), Number(coordinates.lat)]
       };
     } else {
-      // Yoksa adresten otomatik al
-      location = await geocodeAddressToPoint(addressText);
+      // Yoksa adresten otomatik al (semt bazlı)
+      location = await geocodeAddressToPoint(addressText, district);
     }
     
     const hashedPassword = await bcrypt.hash(password, 10);

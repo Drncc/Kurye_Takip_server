@@ -39,9 +39,9 @@ router.post('/', auth('store'), async (req, res) => {
       return res.status(404).json({ error: 'Dükkan bulunamadı' });
     }
 
-    // Teslimat adresinden GPS koordinatlarını otomatik al
+    // Teslimat adresinden GPS koordinatlarını otomatik al (semt bazlı)
     const fullAddress = `${deliveryAddress}, ${deliveryDistrict}`;
-    const deliveryLocation = await geocodeAddressToPoint(fullAddress);
+    const deliveryLocation = await geocodeAddressToPoint(fullAddress, deliveryDistrict);
     
     if (!deliveryLocation) {
       return res.status(400).json({ error: 'Teslimat adresi bulunamadı. Lütfen geçerli bir adres girin.' });

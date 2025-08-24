@@ -1,12 +1,24 @@
 const express = require('express');
 const auth = require('../middleware/auth');
 const Shop = require('../models/shop');
+const { getAvailableDistricts } = require('../utils/geocode');
 
 const router = express.Router();
 
 router.get('/me', auth('shop'), async (req, res) => {
   const me = await Shop.findById(req.user.id).lean();
   res.json({ me });
+});
+
+// Mevcut semtleri getir
+router.get('/districts', async (req, res) => {
+  try {
+    const districts = getAvailableDistricts();
+    res.json({ districts });
+  } catch (error) {
+    console.error('Districts fetch error:', error);
+    res.status(500).json({ error: 'Semtler alınamadı' });
+  }
 });
 
 // Dükkan konum güncelleme
