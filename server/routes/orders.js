@@ -9,7 +9,7 @@ const router = express.Router();
 // Yeni sipariş oluştur
 router.post('/', auth('store'), async (req, res) => {
   try {
-    const { customerName, customerPhone, deliveryAddress, deliveryDistrict, packageDetails, priority } = req.body;
+    const { customerName, customerPhone, deliveryAddress, deliveryDistrict, packageDetails, priority, deliveryCoords } = req.body;
     
     if (!customerName || !customerPhone || !deliveryAddress || !deliveryDistrict || !packageDetails) {
       return res.status(400).json({ error: 'Tüm alanlar zorunludur' });
@@ -21,6 +21,15 @@ router.post('/', auth('store'), async (req, res) => {
       return res.status(404).json({ error: 'Dükkan bulunamadı' });
     }
 
+    // Delivery location oluştur
+    let deliveryLocation = null;
+    if (deliveryCoords && deliveryCoords.lng && deliveryCoords.lat) {
+      deliveryLocation = {
+        type: 'Point',
+        coordinates: [deliveryCoords.lng, deliveryCoords.lat]
+      };
+    }
+
     // Sipariş oluştur
     const order = new Order({
       shop: req.user.id,
@@ -28,6 +37,7 @@ router.post('/', auth('store'), async (req, res) => {
       customerPhone,
       deliveryAddress: `${deliveryAddress}, ${deliveryDistrict}`,
       deliveryDistrict,
+      deliveryLocation,
       packageDetails,
       priority: priority || 'normal',
       status: 'pending'
@@ -35,13 +45,15 @@ router.post('/', auth('store'), async (req, res) => {
 
     await order.save();
 
-    // En yakın müsait kuryeyi bul ve ata
+    // En yakın müsait kuryeyi bul ve ata (daha geniş arama)
     const nearbyCourier = await Courier.findOne({
       active: true,
+      status: 'available'
+    }).sort({
       location: {
         $near: {
           $geometry: shop.location,
-          $maxDistance: 10000 // 10km
+          $maxDistance: 50000 // 50km - daha geniş arama
         }
       }
     });
@@ -52,6 +64,9 @@ router.post('/', auth('store'), async (req, res) => {
       order.status = 'assigned';
       order.assignedAt = new Date();
       await order.save();
+      
+      // Kurye durumunu güncelle
+      await Courier.findByIdAndUpdate(nearbyCourier._id, { status: 'busy' });
       
       assignedCourier = {
         _id: nearbyCourier._id,
@@ -90,9 +105,9 @@ router.get('/mine', auth('courier'), async (req, res) => {
   try {
     const orders = await Order.find({ 
       assignedCourier: req.user.id,
-      status: { $in: ['assigned', 'picked'] }
+      status: { $in: ['assigned', 'picked', 'delivered'] }
     })
-      .populate('shop', 'name addressText')
+      .populate('shop', 'name addressText location')
       .sort({ createdAt: -1 });
     
     res.json({ orders });
@@ -151,6 +166,11 @@ router.post('/:id/status', auth(), async (req, res) => {
     } else if (status === 'delivered') {
       order.deliveredAt = new Date();
       order.actualDeliveryTime = new Date();
+      
+      // Kurye durumunu available yap
+      if (order.assignedCourier) {
+        await Courier.findByIdAndUpdate(order.assignedCourier, { status: 'available' });
+      }
     }
 
     await order.save();
@@ -162,6 +182,28 @@ router.post('/:id/status', auth(), async (req, res) => {
   } catch (error) {
     console.error('Order status update error:', error);
     res.status(500).json({ error: 'Durum güncellenemedi' });
+  }
+});
+
+// Kurye için sipariş detaylarını getir
+router.get('/:id/details', auth('courier'), async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id)
+      .populate('shop', 'name addressText location')
+      .populate('assignedCourier', 'name phone');
+    
+    if (!order) {
+      return res.status(404).json({ error: 'Sipariş bulunamadı' });
+    }
+    
+    if (order.assignedCourier?.toString() !== req.user.id) {
+      return res.status(403).json({ error: 'Bu siparişi görüntüleyemezsiniz' });
+    }
+    
+    res.json({ order });
+  } catch (error) {
+    console.error('Order details fetch error:', error);
+    res.status(500).json({ error: 'Sipariş detayları alınamadı' });
   }
 });
 

@@ -11,19 +11,55 @@ router.get('/me', auth('courier'), async (req, res) => {
 });
 
 router.post('/status', auth('courier'), async (req, res) => {
-  const { active } = req.body;
-  const updated = await Courier.findByIdAndUpdate(req.user.id, { active }, { new: true }).lean();
-  res.json({ active: updated.active });
+  try {
+    const { active } = req.body;
+    const status = active ? 'available' : 'offline';
+    
+    const updated = await Courier.findByIdAndUpdate(
+      req.user.id, 
+      { active, status }, 
+      { new: true }
+    ).lean();
+    
+    res.json({ 
+      active: updated.active, 
+      status: updated.status,
+      message: active ? 'Kurye aktif' : 'Kurye pasif'
+    });
+  } catch (error) {
+    console.error('Status update error:', error);
+    res.status(500).json({ error: 'Durum güncellenemedi' });
+  }
 });
 
 router.post('/location', auth('courier'), async (req, res) => {
-  const { addressText, coords } = req.body; // coords: { lng, lat }
-  let location;
-  if (coords) location = { type: 'Point', coordinates: [coords.lng, coords.lat] };
-  else if (addressText) location = await geocodeAddressToPoint(addressText);
-  else return res.status(400).json({ error: 'Provide addressText or coords' });
-  await Courier.findByIdAndUpdate(req.user.id, { location }, { new: true });
-  res.json({ ok: true });
+  try {
+    const { addressText, coords } = req.body; // coords: { lng, lat }
+    let location;
+    
+    if (coords && coords.lng && coords.lat) {
+      location = { type: 'Point', coordinates: [coords.lng, coords.lat] };
+    } else if (addressText) {
+      location = await geocodeAddressToPoint(addressText);
+    } else {
+      return res.status(400).json({ error: 'Provide addressText or coords' });
+    }
+    
+    const updated = await Courier.findByIdAndUpdate(
+      req.user.id, 
+      { location }, 
+      { new: true }
+    );
+    
+    res.json({ 
+      ok: true, 
+      location: updated.location,
+      message: 'Konum güncellendi'
+    });
+  } catch (error) {
+    console.error('Location update error:', error);
+    res.status(500).json({ error: 'Konum güncellenemedi' });
+  }
 });
 
 // List nearby active couriers for a given pickup point (shop)

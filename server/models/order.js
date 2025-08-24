@@ -7,6 +7,10 @@ const orderSchema = new mongoose.Schema({
   customerPhone: { type: String, required: true },
   deliveryAddress: { type: String, required: true },
   deliveryDistrict: { type: String, required: true },
+  deliveryLocation: {
+    type: { type: String, enum: ['Point'], default: 'Point' },
+    coordinates: { type: [Number] } // [lng, lat]
+  },
   packageDetails: { type: String, required: true },
   priority: { type: String, enum: ['normal', 'urgent', 'express'], default: 'normal' },
   status: { type: String, enum: ['pending', 'assigned', 'picked', 'delivered', 'cancelled'], default: 'pending' },
@@ -17,5 +21,8 @@ const orderSchema = new mongoose.Schema({
   estimatedDeliveryTime: { type: Date },
   actualDeliveryTime: { type: Date }
 }, { timestamps: true });
+
+// Geospatial index for delivery location
+orderSchema.index({ deliveryLocation: '2dsphere' });
 
 module.exports = mongoose.model('Order', orderSchema);
