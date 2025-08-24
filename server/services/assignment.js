@@ -1,4 +1,4 @@
-const Courier = require('../models/Courier');
+const Courier = require('../models/courier');
 
 async function findNearestActiveCourier(point) {
   // point: { type: 'Point', coordinates: [lng, lat] }
