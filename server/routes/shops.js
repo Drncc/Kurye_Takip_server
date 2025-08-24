@@ -9,6 +9,37 @@ router.get('/me', auth('shop'), async (req, res) => {
   res.json({ me });
 });
 
+// Dükkan konum güncelleme
+router.post('/location', auth('shop'), async (req, res) => {
+  try {
+    const { coordinates } = req.body; // { lng, lat }
+    
+    if (!coordinates || typeof coordinates.lng !== 'number' || typeof coordinates.lat !== 'number') {
+      return res.status(400).json({ error: 'Geçerli GPS koordinatları gerekli (lng ve lat)' });
+    }
+    
+    const location = { 
+      type: 'Point', 
+      coordinates: [coordinates.lng, coordinates.lat] 
+    };
+    
+    const updated = await Shop.findByIdAndUpdate(
+      req.user.id, 
+      { location }, 
+      { new: true }
+    );
+    
+    res.json({ 
+      ok: true, 
+      message: 'Konum güncellendi',
+      location: updated.location
+    });
+  } catch (error) {
+    console.error('Location update error:', error);
+    res.status(500).json({ error: 'Konum güncellenemedi' });
+  }
+});
+
 // List nearby shops for a given courier location
 router.post('/nearby', auth('courier'), async (req, res) => {
   const { courierLocation } = req.body; // { type:'Point', coordinates:[lng,lat] }

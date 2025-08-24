@@ -10,7 +10,7 @@ const jwtSecret = process.env.JWT_SECRET || 'your-secret-key';
 
 router.post('/register/shop', async (req, res) => {
   try {
-    const { name, email, password, addressText, district } = req.body;
+    const { name, email, password, addressText, district, coordinates } = req.body;
     
     if (!name || !email || !password || !addressText || !district) {
       return res.status(400).json({ error: 'Tüm alanlar zorunludur' });
@@ -22,12 +22,46 @@ router.post('/register/shop', async (req, res) => {
       return res.status(400).json({ error: 'Bu e-posta adresi zaten kullanılıyor. Lütfen farklı bir e-posta adresi deneyin.' });
     }
     
-    const location = await geocodeAddressToPoint(addressText);
+    let location;
+    
+    // Eğer GPS koordinatları verilmişse onları kullan
+    if (coordinates && coordinates.lng && coordinates.lat) {
+      location = {
+        type: 'Point',
+        coordinates: [Number(coordinates.lng), Number(coordinates.lat)]
+      };
+    } else {
+      // Yoksa adresten otomatik al
+      location = await geocodeAddressToPoint(addressText);
+    }
+    
     const hashedPassword = await bcrypt.hash(password, 10);
-    const shop = await Shop.create({ name, email: email.toLowerCase(), password: hashedPassword, addressText, district, location });
+    const shop = await Shop.create({ 
+      name, 
+      email: email.toLowerCase(), 
+      password: hashedPassword, 
+      addressText, 
+      district, 
+      location 
+    });
+    
     const token = jwt.sign({ id: shop._id, role: 'shop' }, jwtSecret, { expiresIn: '7d' });
-    res.json({ token });
-  } catch (e) { res.status(400).json({ error: e.message }); }
+    res.json({ 
+      message: 'Dükkan kaydı başarılı',
+      token,
+      shop: {
+        _id: shop._id,
+        name: shop.name,
+        email: shop.email,
+        addressText: shop.addressText,
+        district: shop.district,
+        location: shop.location
+      }
+    });
+  } catch (e) { 
+    console.error('Shop registration error:', e);
+    res.status(400).json({ error: e.message }); 
+  }
 });
 
 router.post('/register/courier', async (req, res) => {

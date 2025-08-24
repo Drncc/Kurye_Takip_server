@@ -11,9 +11,9 @@ async function fetchFn(url, options) {
 
 async function geocodeAddressToPoint(addressText) {
   try {
-    // Alanya için özel arama
-    const searchQuery = `Alanya, ${addressText}`;
-    const url = `${nominatimBase}/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1&countrycodes=tr&addressdetails=1`;
+    // Daha detaylı arama için adres formatını iyileştir
+    const searchQuery = `${addressText}, Alanya, Antalya, Turkey`;
+    const url = `${nominatimBase}/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=3&countrycodes=tr&addressdetails=1&viewbox=31.5,36.3,32.5,36.8`;
     
     const res = await fetchFn(url, { 
       headers: { 'User-Agent': 'DeliveryPro/1.0 (ddirenc5@gmail.com)' } 
@@ -21,33 +21,34 @@ async function geocodeAddressToPoint(addressText) {
     
     if (!res.ok) {
       console.log('Geocoding API hatası:', res.status);
-      // API hatası durumunda varsayılan Alanya koordinatları döndür
-      return { type: 'Point', coordinates: [31.9957, 36.5441] };
+      return null; // Hata durumunda null döndür
     }
     
     const data = await res.json();
     
     if (!data.length) {
       console.log('Adres bulunamadı:', searchQuery);
-      // Adres bulunamadığında varsayılan Alanya koordinatları döndür
-      return { type: 'Point', coordinates: [31.9957, 36.5441] };
+      return null; // Adres bulunamadığında null döndür
     }
     
-    const { lon, lat, display_name } = data[0];
+    // En iyi eşleşmeyi bul
+    const bestMatch = data.find(item => {
+      const displayName = item.display_name.toLowerCase();
+      return displayName.includes('alanya') || displayName.includes('antalya');
+    }) || data[0];
     
-    // Alanya içinde mi kontrol et
-    if (display_name && display_name.toLowerCase().includes('alanya')) {
-      return { type: 'Point', coordinates: [Number(lon), Number(lat)] };
-    } else {
-      console.log('Adres Alanya dışında:', display_name);
-      // Alanya dışındaysa varsayılan koordinatlar döndür
-      return { type: 'Point', coordinates: [31.9957, 36.5441] };
-    }
+    const { lon, lat, display_name } = bestMatch;
+    
+    console.log('Bulunan adres:', display_name, 'Koordinatlar:', lon, lat);
+    
+    return { 
+      type: 'Point', 
+      coordinates: [Number(lon), Number(lat)] 
+    };
     
   } catch (error) {
     console.log('Geocoding hatası:', error.message);
-    // Hata durumunda varsayılan Alanya koordinatları döndür
-    return { type: 'Point', coordinates: [31.9957, 36.5441] };
+    return null; // Hata durumunda null döndür
   }
 }
 
