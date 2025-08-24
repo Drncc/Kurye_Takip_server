@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "nodemon server/index.js",
-    "build": "cd server && npm install",
+    "build": "echo 'Build completed - no build step required'",
     "postinstall": "echo 'Postinstall completed'"
   },
   "keywords": ["kurye", "takip", "api", "express"],
