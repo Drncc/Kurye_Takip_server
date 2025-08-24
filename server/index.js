@@ -18,6 +18,15 @@ app.use(express.json());
 
 connectDb();
 
+// Health check endpoint
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'Kurye Takip API çalışıyor!',
+    status: 'active',
+    timestamp: new Date().toISOString()
+  });
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/couriers', courierRoutes);
 app.use('/api/shops', shopRoutes);
