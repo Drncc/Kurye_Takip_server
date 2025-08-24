@@ -18,10 +18,10 @@ app.use('/api/couriers', courierRoutes);
 app.use('/api/shops', shopRoutes);
 app.use('/api/orders', orderRoutes);
 
-// Admin route
-app.get('/admin', (req, res) => {
-  res.sendFile(path.join(__dirname, '../client/index.html'));
-});
+// Admin route - Client ayrı deploy edileceği için bu route kaldırıldı
+// app.get('/admin', (req, res) => {
+//   res.sendFile(path.join(__dirname, '../client/index.html'));
+// });
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`API running on ${PORT}`));
